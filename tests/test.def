@@ -12,3 +12,14 @@ page: test
     $while i<10
         $print " i = %d", i
         i=i+1
+
+    $print " F(4) = %7.4f", F(4.0)
+
+fncode: F(f_x)
+    $return_type REAL
+
+    $if f_x<0
+        F=f_x*f_x
+    $else
+        F=f_x+2.0
+

@@ -1,7 +1,6 @@
 include: output.def
 include: macros_output/case.def
-include: macros_c/list_functions.def
-
+include: macros/functions.def
 include: macros/print.def
 
 page: output_fortran, output_main
@@ -31,7 +30,9 @@ subcode: parsecode
             return single_block("DO $param", "END DO")
         $call @parsecode_func_other
     $elif $l=~/^NOOP POST_MAIN/
-        # $call autolist_functions
+        push @$out, "END"
+        push @$out, "NEWLINE"
+        $call autolist_functions
         $call @parsecode_post
         return 0
 
@@ -61,11 +62,14 @@ subcode: else_fortran_style
 
 #----------------------------------------------- 
 subcode: dumpout
+    $foreach $func in @function_list
+        process_function($func)
+
     my @out2
     $dump->{f}=\@out2
     push @out2, "PROGRAM $page->{pagename}"
+    $call declare_var_list, out2, $global_hash, @$global_list
     MyDef::dumpout::dumpout($dump)
-    push @out2, "END"
 
     my $label
     $foreach $l in @out2
