@@ -1,0 +1,27 @@
+subcode:: parsecode_func_other
+    $case $func eq "print"
+        $if $param=~/^"(.*)",(.*)/
+            my ($fmt, $vlist)=parse_fmt($1, $2)
+            my $label = get_label()
+            push @$out, "Print $label, $vlist"
+            push @$out, "LABEL $label"
+            push @$out, "Format ($fmt)"
+            return
+
+fncode: parse_fmt($s_fmt, $s_vlist)
+    my @fmt_list
+    my @segs = split /(%[0-9\.]*[fgd])/, $s_fmt
+    $foreach $s in @segs
+        $if $s=~/^%(.*)([fgd])/
+            my ($w, $f)=($1, $2)
+            $if !$w
+                $w = 6
+            $if $f eq "f"
+                push @fmt_list, "F$w"
+            $elif $f eq "g"
+                push @fmt_list, "E$w"
+            $elif $f eq "d"
+                push @fmt_list, "I$w"
+        $else
+            push @fmt_list, "'$s'"
+    return (join(",", @fmt_list), $s_vlist)
