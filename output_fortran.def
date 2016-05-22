@@ -1,4 +1,8 @@
 include: output.def
+include: macros_output/case.def
+include: macros_c/list_functions.def
+
+include: macros/print.def
 
 page: output_fortran, output_main
     output_dir: lib/MyDef
@@ -7,17 +11,123 @@ page: output_fortran, output_main
 
 
 subcode: init_page
+    $global $label_index
+    $label_index=0
+
+fncode: get_label
+    $label_index++
+    return sprintf("%d", $label_index*10)
 
 subcode: parsecode
+    $call parsecode_case_support, IF, ELSEIF, fortran_style
     $if $l=~/^\$(\w+)\s*(.*?)\s*$/
         my ($func, $param)=($1, $2)
+        $if $func eq "while"
+            $if $param eq "1"
+                return single_block("DO", "END DO")
+            $else
+                return single_block("DO WHILE ($param)", "END DO")
+        $elif $func eq "for"
+            return single_block("DO $param", "END DO")
+        $call @parsecode_func_other
     $elif $l=~/^NOOP POST_MAIN/
         # $call autolist_functions
+        $call @parsecode_post
         return 0
 
     $call @parsecode_filter
     push @$out, $l
     return 0
 
+# ----
+subcode: case_fortran_style
+    $(if:0)
+        $global %op=("=="=>"EQ","<="=>"LE",">="=>"GE","<"=>"LT",">"=>"GT","/="=>"NE","!="=>"NE")
+        $cond=~s/([\/!<>]=|[<>])/.$op{$1}./g
+    push @$out, "$case ($cond) THEN"
+    push @$out, "INDENT"
+    push @$out, "BLOCK"
+    push @$out, "DEDENT"
+    $if $case eq "IF"
+        $if !$case_wrap
+            $case_wrap=[]
+        push @$case_wrap, "ENDIF"
+
+subcode: else_fortran_style
+    push @$out, "ELSE"
+    push @$out, "INDENT"
+    push @$out, "BLOCK"
+    push @$out, "DEDENT"
+
+#----------------------------------------------- 
 subcode: dumpout
-    push @$f, "PROGRAM $page->{pagename}\n"
+    my @out2
+    $dump->{f}=\@out2
+    push @out2, "PROGRAM $page->{pagename}"
+    MyDef::dumpout::dumpout($dump)
+    push @out2, "END"
+
+    my $label
+    $foreach $l in @out2
+        $(if:1)
+            chomp $l
+            $call filter_f77_line
+        $(else)
+            push @$f, $l
+    return
+
+    subcode: filter_f77_line
+        $if $l=~/^\s*LABEL\s+(\d+)/
+            $label=sprintf("%5d ", $1)
+        $else
+            my $prefix
+            $if $label
+                $prefix=$label
+                undef $label
+            $else
+                $prefix=' ' x 6
+
+            $if length($l)>72-6
+                my $line_list = fortran_break_line($l)
+                $foreach $l2 in @$line_list
+                    push @$f, "$prefix$l2\n"
+                    $prefix = '     &'
+            $else
+                push @$f, "$prefix$l\n"
+
+#----------------------------------------------- 
+fncode: fortran_break_line($l)
+    my $limit = 72-6
+    my @line_list
+    my $len = length($l)
+    my $i = 0
+    $while $i<$len
+        my $j = $i+$limit-1
+        $if $j>$len
+            $j=$len
+        $else
+            $call get_better_break
+        push @line_list, substr($l, $i, $j-$i)
+        $i=$j
+
+    return \@line_list
+
+    # -------------------
+    subcode: get_better_break
+        my $last_type
+        $for $k=0:10
+            my $type
+            $(enumset:space,word,paren,other)
+            my $c = substr($l, $j-$k, 1)
+            $if $c eq ' '
+                $type=$(space)
+            $elif $c =~/[\(\[\{\}\]\)]/
+                $type=$(paren)
+            $elif $c=~/\w/
+                $type=$(word)
+            $else
+                $type=$(other)
+            $if $last_type && $type != $last_type
+                $j=$j-$k+1
+                last
+            $last_type = $type
