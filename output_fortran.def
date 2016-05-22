@@ -1,0 +1,23 @@
+include: output.def
+
+page: output_fortran, output_main
+    output_dir: lib/MyDef
+    ext: f
+    package: MyDef::output_fortran
+
+
+subcode: init_page
+
+subcode: parsecode
+    $if $l=~/^\$(\w+)\s*(.*?)\s*$/
+        my ($func, $param)=($1, $2)
+    $elif $l=~/^NOOP POST_MAIN/
+        # $call autolist_functions
+        return 0
+
+    $call @parsecode_filter
+    push @$out, $l
+    return 0
+
+subcode: dumpout
+    push @$f, "PROGRAM $page->{pagename}\n"
