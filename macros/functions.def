@@ -1,0 +1,121 @@
+include: macros_output/functions.def
+
+subcode: autolist_functions
+    &call each_subcode, fn
+        $call list_function, $name
+
+subcode: function_pop
+    # necessary wrap "end if" at end of code
+    $call case_reset
+
+subcode:: parsecode_func_other
+    $case $func =~/^(return_type|parameter|lexical)$/
+        $if $cur_function
+            my $func=$cur_function
+            $if $1 eq "return_type"
+                $func->{ret_type}=$param
+            $elif $1 eq "parameter"
+                $call add_function_parameter
+        return
+    $case $func =~/^(global|local)$/
+        my ($var_hash, $var_list)
+        $if $1 eq "global"
+            $global $global_hash={}, $global_list=[]
+            $var_hash=$global_hash
+            $var_list=$global_list
+        $elif $cur_function
+            $var_hash=$cur_function->{var_hash}
+            $var_list=$cur_function->{var_list}
+
+        my @plist=split /,\s*/, $param
+        $foreach $p in @plist
+            my ($type, $name, $dim)=parse_var($p)
+            $if !$var_hash->{$name}
+                $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
+                push @$var_list, $name
+
+
+fncode: open_function($name, $param)
+    my $func={param_list=>[], var_list=>[], var_hash=>{}, init=>[], finish=>[]}
+    $func->{name}=$name
+
+    $global $cur_function
+    $cur_function=$func
+
+    $if $param
+        $call add_function_parameter
+
+    return $func
+
+
+subcode: add_function_parameter
+    my $param_list = $func->{param_list}
+    my $var_hash = $func->{var_hash}
+    my @plist = split /,\s*/, $param
+
+    $foreach $p in @plist
+        my ($type, $name, $dim)=parse_var($p)
+        $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
+        push @$param_list, $name
+
+fncode: parse_var($p)
+    my ($type, $name, $dim)
+    $if $p=~/(\S.*)\s+(\S+)\s*$/
+        ($type, $name)=($1, $2)
+    $else
+        $name=$p
+        $if $p=~/^f/i
+            $type="REAL"
+        $elif $p=~/^d/i
+            $type="DOUBLE PRECISION"
+        $elif $p=~/^s/i
+            $type="CHARACTER"
+        $elif $p=~/^[ijklmn]/i
+            $type="INTEGER"
+        $else
+            $type="REAL"
+
+    $if $name=~/(\w+)\((.*)\)/
+        $name=$1
+        $dim =$2
+    return ($type, $name, $dim)
+
+
+fncode: process_function($func)
+    my $name=$func->{name}
+    $(for:open in open,pre,post,close)
+        my $$(open) = $func->{$(open)block}
+
+    my $ret_type = $func->{ret_type}
+    my $param_list = $func->{param_list}
+    my $param = join(', ', @$param_list)
+    $if !$ret_type
+        push @$open, "SUBROUTINE $name($param)"
+    $else
+        push @$open, "$ret_type FUNCTION $name($param)"
+
+    # -------
+    my $var_hash=$func->{var_hash}
+    my $var_list=$func->{var_list}
+    $call declare_var_list, $pre, $var_hash, @$param_list, @$var_list
+
+    # -------
+    push @$close, "END"
+
+subcode: declare_var_list(out, hash, @list)            
+    my %type_list
+    $foreach $p in $(list)
+        my $type=$(hash)->{$p}->{type}
+        my $name=$p
+        $if $(hash)->{$p}->{dim}
+            $name.="(".$(hash)->{$p}->{dim}.")"
+
+        $if !$type_list{$type}
+            $type_list{$type}=[]
+        push @{$type_list{$type}}, $name
+
+
+    $foreach %type_list
+        push @$(out), "$k ".join(", ", @$v)
+
+
