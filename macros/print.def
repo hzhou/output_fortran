@@ -7,6 +7,15 @@ subcode:: parsecode_func_other
             push @$out, "LABEL $label"
             push @$out, "Format ($fmt)"
             return
+    $case $func eq "dump"
+        my @plist=split /,\s*/, $param
+        my @segs
+        push @segs, "PRINT*"
+        $foreach $p in @plist
+            push @segs, "' $p='"
+            push @segs, $p
+        push @$out, join(", ", @segs)
+        return
 
 fncode: parse_fmt($s_fmt, $s_vlist)
     my @fmt_list

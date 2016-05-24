@@ -13,6 +13,10 @@ subcode: init_page
     $global $label_index
     $label_index=0
 
+    $global $default_float = "REAL"
+    $if $MyDef::def->{macros}->{use_double} or $page->{use_double}
+        $default_float="DOUBLE PRECISION"
+
 fncode: get_label
     $label_index++
     return sprintf("%d", $label_index*10)
@@ -21,12 +25,29 @@ subcode: parsecode
     $call parsecode_case_support, IF, ELSEIF, fortran_style
     $if $l=~/^\$(\w+)\s*(.*?)\s*$/
         my ($func, $param)=($1, $2)
-        $if $func eq "while"
+        $if $func eq "uselib"
+            $global %objects
+            my @tlist = split /,\s*/, $param
+            $foreach $f in @tlist
+                $if $f=~/^\w+$/
+                    $objects{"lib$f"}=1
+                $else
+                    $objects{$f}=1
+            return
+        $elif $func eq "getlabel"
+            my $s = get_label()
+            $if !$param
+                $param="label"
+            $call set_macro, $param, $s
+            return
+        $elif $func eq "while"
             $if $param eq "1"
                 return single_block("DO", "END DO")
             $else
                 return single_block("DO WHILE ($param)", "END DO")
         $elif $func eq "for"
+            $if $param =~/(\w+)\s*=/
+                local_add_var("INTEGER $1")
             return single_block("DO $param", "END DO")
         $call @parsecode_func_other
     $elif $l=~/^NOOP POST_MAIN/
@@ -45,25 +66,22 @@ subcode: case_fortran_style
     $(if:0)
         $global %op=("=="=>"EQ","<="=>"LE",">="=>"GE","<"=>"LT",">"=>"GT","/="=>"NE","!="=>"NE")
         $cond=~s/([\/!<>]=|[<>])/.$op{$1}./g
-    push @$out, "$case ($cond) THEN"
-    push @$out, "INDENT"
-    push @$out, "BLOCK"
-    push @$out, "DEDENT"
+    push @src, "$case ($cond) THEN"
+    $call push_indented_block
     $if $case eq "IF"
         $if !$case_wrap
             $case_wrap=[]
         push @$case_wrap, "ENDIF"
 
 subcode: else_fortran_style
-    push @$out, "ELSE"
-    push @$out, "INDENT"
-    push @$out, "BLOCK"
-    push @$out, "DEDENT"
+    push @src, "ELSE"
+    $call push_indented_block
 
 #----------------------------------------------- 
 subcode: dumpout
     $foreach $func in @function_list
         process_function($func)
+    $call process_link_objects
 
     my @out2
     $dump->{f}=\@out2
@@ -98,6 +116,22 @@ subcode: dumpout
                     $prefix = '     &'
             $else
                 push @$f, "$prefix$l\n"
+
+    subcode: process_link_objects
+        my @objlist
+        my @liblist
+        $foreach $i in keys %objects
+            $if $i=~/^lib(.*)/
+                push @liblist, "-l$1"
+            $else
+                push @objlist, $i
+        my ($lib_list, $obj_list)
+        $if @liblist
+            $lib_list=join(" ", @liblist)
+            $page->{lib_list}=$lib_list
+        $if @objlist
+            $obj_list=join(" ", @objlist)
+            $page->{lib_list}.=" ".$obj_list
 
 #----------------------------------------------- 
 fncode: fortran_break_line($l)

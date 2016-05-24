@@ -18,23 +18,42 @@ subcode:: parsecode_func_other
                 $call add_function_parameter
         return
     $case $func =~/^(global|local)$/
-        my ($var_hash, $var_list)
         $if $1 eq "global"
-            $global $global_hash={}, $global_list=[]
-            $var_hash=$global_hash
-            $var_list=$global_list
-        $elif $cur_function
-            $var_hash=$cur_function->{var_hash}
-            $var_list=$cur_function->{var_list}
+            global_add_var($param)
+        $else
+            local_add_var($param)
+        return
 
-        my @plist=split /,\s*/, $param
-        $foreach $p in @plist
-            my ($type, $name, $dim)=parse_var($p)
-            $if !$var_hash->{$name}
-                $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
-                push @$var_list, $name
+#----------------------------------------------- 
+fncode: local_add_var($param)
+    $if $cur_function
+        add_variable($cur_function->{var_hash}, $cur_function->{var_list}, $param)
+    $else
+        add_variable($global_hash, $global_list, $param)
 
+fncode: global_add_var($param)
+    $global $global_hash={}, $global_list=[]
+    add_variable($global_hash, $global_list, $param)
 
+fncode: add_variable($var_hash, $var_list, $param)
+    my @plist=split /,\s*/, $param
+    $foreach $p in @plist
+        my ($type, $name, $dim, $val)
+        $if $p=~/^(.*?(\w+))\s*=\s*(.+)/
+            ($p, $name, $val) = ($1, $2, $3)
+            push @$out, "$name = $val"
+            $if $val =~/^'(.*)'$/
+                $type="CHARACTER"
+                $dim =length($1)
+            $elif $val =~/^\.(true|false).$/i
+                $type="LOGICAL"
+        $if !$type
+            ($type, $name, $dim)=parse_var($p)
+        $if !$var_hash->{$name}
+            $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
+            push @$var_list, $name
+
+#----------------------------------------------- 
 fncode: open_function($name, $param)
     my $func={param_list=>[], var_list=>[], var_hash=>{}, init=>[], finish=>[]}
     $func->{name}=$name
@@ -65,7 +84,7 @@ fncode: parse_var($p)
     $else
         $name=$p
         $if $p=~/^f/i
-            $type="REAL"
+            $type=$default_float
         $elif $p=~/^d/i
             $type="DOUBLE PRECISION"
         $elif $p=~/^s/i
@@ -73,7 +92,7 @@ fncode: parse_var($p)
         $elif $p=~/^[ijklmn]/i
             $type="INTEGER"
         $else
-            $type="REAL"
+            $type=$default_float
 
     $if $name=~/(\w+)\((.*)\)/
         $name=$1
@@ -101,14 +120,19 @@ fncode: process_function($func)
 
     # -------
     push @$close, "END"
+    push @$close, "NEWLINE"
 
-subcode: declare_var_list(out, hash, @list)            
+subcode: declare_var_list(out, hash, @list)
     my %type_list
     $foreach $p in $(list)
         my $type=$(hash)->{$p}->{type}
+        my $dim=$(hash)->{$p}->{dim}
         my $name=$p
-        $if $(hash)->{$p}->{dim}
-            $name.="(".$(hash)->{$p}->{dim}.")"
+        $if $dim
+            $if $type eq "CHARACTER"
+                $name.="*$dim"
+            $else
+                $name.="($dim)"
 
         $if !$type_list{$type}
             $type_list{$type}=[]
