@@ -7,6 +7,7 @@ page: output_fortran, output_main
     output_dir: lib/MyDef
     ext: f
     package: MyDef::output_fortran
+    autolist: 1
 
 
 subcode: init_page
@@ -53,7 +54,7 @@ subcode: parsecode
     $elif $l=~/^NOOP POST_MAIN/
         push @$out, "END"
         push @$out, "NEWLINE"
-        $call autolist_functions
+        $call autolist_functions, add
         $call @parsecode_post
         return 0
 
@@ -80,7 +81,7 @@ subcode: else_fortran_style
 #----------------------------------------------- 
 subcode: dumpout
     $foreach $func in @function_list
-        process_function($func)
+        process_function_std($func)
     $call process_link_objects
 
     my @out2
