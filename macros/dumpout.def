@@ -1,0 +1,64 @@
+subcode: dumpout
+    $foreach $func in @function_list
+        process_function_std($func)
+    $call process_link_objects
+
+    my @out2
+    $dump->{f}=\@out2
+    push @out2, "PROGRAM $page->{_pagename}"
+    $call dump_globals
+    MyDef::dumpout::dumpout($dump)
+
+    my $label
+    $foreach $l in @out2
+        $(if:1)
+            chomp $l
+            $call filter_f77_line
+        $(else)
+            push @$f, $l
+    return
+
+    #------------------------------------------- 
+    subcode: dump_globals
+        $if @$global_list
+            $foreach $name in @$global_list
+                my $v = $global_hash->{$name}
+                my $decl = var_declare($v)
+                push @out2, "$decl\n"
+            push @out2, "\n"
+
+    subcode: filter_f77_line
+        $if $l=~/^\s*LABEL\s+(\d+)/
+            $label=sprintf("%5d ", $1)
+        $else
+            my $prefix
+            $if $label
+                $prefix=$label
+                undef $label
+            $else
+                $prefix=' ' x 6
+
+            $if length($l)>72-6
+                my $line_list = fortran_break_line($l)
+                $foreach $l2 in @$line_list
+                    push @$f, "$prefix$l2\n"
+                    $prefix = '     &'
+            $else
+                push @$f, "$prefix$l\n"
+
+    subcode: process_link_objects
+        my @objlist
+        my @liblist
+        $foreach $i in keys %objects
+            $if $i=~/^lib(.*)/
+                push @liblist, "-l$1"
+            $else
+                push @objlist, $i
+        my ($lib_list, $obj_list)
+        $if @liblist
+            $lib_list=join(" ", @liblist)
+            $page->{lib_list}=$lib_list
+        $if @objlist
+            $obj_list=join(" ", @objlist)
+            $page->{lib_list}.=" ".$obj_list
+
