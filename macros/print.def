@@ -7,6 +7,15 @@ subcode:: parsecode_func_other
             push @$out, "LABEL $label"
             push @$out, "Format ($fmt)"
             return
+        $elif $param=~/^(.*?);\s*(.*)/
+            my $label = get_label()
+            push @$out, "Print $label, $1"
+            push @$out, "LABEL $label"
+            push @$out, "Format ($2)"
+            return
+        $else
+            push @$out, "Print *, $param"
+            return
     $case $func eq "dump"
         my @plist=split /,\s*/, $param
         my @segs

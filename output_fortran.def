@@ -1,5 +1,11 @@
 include: output.def
 include: macros_output/case.def
+include: macros_output/for.def
+include: macros_output/functions.def
+include: macros_output/scope.def
+include: macros_output/variables.def
+
+include: macros/dumpout.def
 include: macros/functions.def
 include: macros/print.def
 
@@ -16,6 +22,9 @@ subcode: init_page
     $global $default_float = "REAL"
     $if $MyDef::def->{macros}->{use_double} or $page->{use_double}
         $default_float="DOUBLE PRECISION"
+
+    $call function_init
+    $call autolist_functions, add
 
 fncode: get_label
     $label_index++
@@ -46,14 +55,16 @@ subcode: parsecode
             $else
                 return single_block("DO WHILE ($param)", "END DO")
         $elif $func eq "for"
-            $if $param =~/(\w+)\s*=/
+            $if $param =~/(\w+)\s*=(.*)/
                 local_add_var("INTEGER $1")
+                $if $2=~/^\s*0,/
+                    $call warn, for loop start at 0? (FORTRAN often start at 1)
             return single_block("DO $param", "END DO")
         $call @parsecode_func_other
     $elif $l=~/^NOOP POST_MAIN/
         push @$out, "END"
         push @$out, "NEWLINE"
-        $call autolist_functions
+        $call function_list_all
         $call @parsecode_post
         return 0
 
@@ -78,86 +89,54 @@ subcode: else_fortran_style
     $call push_indented_block
 
 #----------------------------------------------- 
-subcode: dumpout
-    $foreach $func in @function_list
-        process_function($func)
-    $call process_link_objects
-
-    my @out2
-    $dump->{f}=\@out2
-    push @out2, "PROGRAM $page->{pagename}"
-    $call declare_var_list, out2, $global_hash, @$global_list
-    MyDef::dumpout::dumpout($dump)
-
-    my $label
-    $foreach $l in @out2
-        $(if:1)
-            chomp $l
-            $call filter_f77_line
-        $(else)
-            push @$f, $l
-    return
-
-    subcode: filter_f77_line
-        $if $l=~/^\s*LABEL\s+(\d+)/
-            $label=sprintf("%5d ", $1)
-        $else
-            my $prefix
-            $if $label
-                $prefix=$label
-                undef $label
-            $else
-                $prefix=' ' x 6
-
-            $if length($l)>72-6
-                my $line_list = fortran_break_line($l)
-                $foreach $l2 in @$line_list
-                    push @$f, "$prefix$l2\n"
-                    $prefix = '     &'
-            $else
-                push @$f, "$prefix$l\n"
-
-    subcode: process_link_objects
-        my @objlist
-        my @liblist
-        $foreach $i in keys %objects
-            $if $i=~/^lib(.*)/
-                push @liblist, "-l$1"
-            $else
-                push @objlist, $i
-        my ($lib_list, $obj_list)
-        $if @liblist
-            $lib_list=join(" ", @liblist)
-            $page->{lib_list}=$lib_list
-        $if @objlist
-            $obj_list=join(" ", @objlist)
-            $page->{lib_list}.=" ".$obj_list
-
-#----------------------------------------------- 
 fncode: fortran_break_line($l)
+    my $limit = 72-6
+    my ($indent, $indent_size)
+    $if $l=~/^(\s*)/
+        $indent_size = length($1)+2
+        $indent = ' ' x $indent_size
+
     my $limit = 72-6
     my @line_list
     my $len = length($l)
     my $i = 0
     $while $i<$len
         my $j = $i+$limit-1
+        $if $indent
+            $j -= $indent_size
+            $call @check_j_limit
+
         $if $j>$len
             $j=$len
         $else
             $call get_better_break
-        push @line_list, substr($l, $i, $j-$i)
+
+        $if $i==0 or !$indent
+            push @line_list, substr($l, $i, $j-$i)
+        $else
+            push @line_list, $indent.substr($l, $i, $j-$i)
         $i=$j
 
     return \@line_list
 
     # -------------------
+    subcode: check_j_limit
+        $if $j-$i <20
+            $indent_size=2
+            $indent = ' ' x $indent_size
+            $j=$i+$limit -1
+
+
     subcode: get_better_break
+        my $no_indent=1
         my $last_type
         $for $k=0:10
             my $type
-            $(enumset:space,word,paren,other)
+            $(enumset:space,word,paren,break,other)
             my $c = substr($l, $j-$k, 1)
-            $if $c eq ' '
+            $if $c eq ','
+                $type=$(break)
+            $elif $c eq ' '
                 $type=$(space)
             $elif $c =~/[\(\[\{\}\]\)]/
                 $type=$(paren)
@@ -165,7 +144,15 @@ fncode: fortran_break_line($l)
                 $type=$(word)
             $else
                 $type=$(other)
-            $if $last_type && $type != $last_type
+            $if $type==$(break) or $last_type && $type != $last_type
                 $j=$j-$k+1
+                $no_indent=0
                 last
             $last_type = $type
+
+        $call @check_no_indent
+
+        subcode: check_no_indent
+            $if $no_indent
+                $indent_size=0
+                undef $indent

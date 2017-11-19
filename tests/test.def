@@ -15,11 +15,11 @@ page: test
 
     $print " F(4) = %7.4f", F(4.0)
 
-fncode: F(f_x)
+fncode: F(x)
     $return_type REAL
 
-    $if f_x<0
-        F=f_x*f_x
+    $if x<0
+        F=x*x
     $else
-        F=f_x+2.0
+        F=x+2.0
 

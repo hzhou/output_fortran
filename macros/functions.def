@@ -1,145 +1,85 @@
-include: macros_output/functions.def
+#---- function styles ----
+macros:
+    function_style: fortran_style
+    scope_return_pattern: ^(exit)
+    function_need_declare: 0
 
-subcode: autolist_functions
-    &call each_subcode, fn
-        $call list_function, $name
+subcode: function_open_fortran_style
+    my $param_list=$func->{"param_list"}
+    my (@plist, @type_list)
+    $foreach $p in @$param_list
+        $if $p=~/(.+)\s+(\w+)$/
+            push @type_list, $1
+            push @plist, $2
+    my $ret = $func->{ret_type}. " FUNCTION"
+    $if !$ret
+        $ret = "SUBROUTINE"
+    push @$open, "$ret $name(".join(', ', @plist).")"
+    push @$pre, "IMPLICIT NONE"
+    $foreach $p in @$param_list
+        push @$pre, $p
 
-subcode: function_pop
-    # necessary wrap "end if" at end of code
-    $call case_reset
-
-subcode:: parsecode_func_other
-    $case $func =~/^(return_type|parameter|lexical)$/
-        $if $cur_function
-            my $func=$cur_function
-            $if $1 eq "return_type"
-                $func->{ret_type}=$param
-            $elif $1 eq "parameter"
-                $call add_function_parameter
-        return
-    $case $func =~/^(global|local)$/
-        $if $1 eq "global"
-            global_add_var($param)
-        $else
-            local_add_var($param)
-        return
-
-#----------------------------------------------- 
-fncode: local_add_var($param)
-    $if $cur_function
-        add_variable($cur_function->{var_hash}, $cur_function->{var_list}, $param)
-    $else
-        add_variable($global_hash, $global_list, $param)
-
-fncode: global_add_var($param)
-    $global $global_hash={}, $global_list=[]
-    add_variable($global_hash, $global_list, $param)
-
-fncode: add_variable($var_hash, $var_list, $param)
-    my @plist=split /,\s*/, $param
-    $foreach $p in @plist
-        my ($type, $name, $dim, $val)
-        $if $p=~/^(.*?(\w+))\s*=\s*(.+)/
-            ($p, $name, $val) = ($1, $2, $3)
-            push @$out, "$name = $val"
-            $if $val =~/^'(.*)'$/
-                $type="CHARACTER"
-                $dim =length($1)
-            $elif $val =~/^\.(true|false).$/i
-                $type="LOGICAL"
-        $if !$type
-            ($type, $name, $dim)=parse_var($p)
-        $if !$var_hash->{$name}
-            $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
-            push @$var_list, $name
-
-#----------------------------------------------- 
-fncode: open_function($name, $param)
-    my $func={param_list=>[], var_list=>[], var_hash=>{}, init=>[], finish=>[]}
-    $func->{name}=$name
-
-    $global $cur_function
-    $cur_function=$func
-
-    $if $param
-        $call add_function_parameter
-
-    return $func
-
-
-subcode: add_function_parameter
-    my $param_list = $func->{param_list}
-    my $var_hash = $func->{var_hash}
-    my @plist = split /,\s*/, $param
-
-    $foreach $p in @plist
-        my ($type, $name, $dim)=parse_var($p)
-        $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
-        push @$param_list, $name
-
-fncode: parse_var($p)
-    my ($type, $name, $dim)
-    $if $p=~/(\S.*)\s+(\S+)\s*$/
-        ($type, $name)=($1, $2)
-    $else
-        $name=$p
-        $if $p=~/^f/i
-            $type=$default_float
-        $elif $p=~/^d/i
-            $type="DOUBLE PRECISION"
-        $elif $p=~/^s/i
-            $type="CHARACTER"
-        $elif $p=~/^[ijklmn]/i
-            $type="INTEGER"
-        $else
-            $type=$default_float
-
-    $if $name=~/(\w+)\((.*)\)/
-        $name=$1
-        $dim =$2
-    return ($type, $name, $dim)
-
-
-fncode: process_function($func)
-    my $name=$func->{name}
-    $(for:open in open,pre,post,close)
-        my $$(open) = $func->{$(open)block}
-
-    my $ret_type = $func->{ret_type}
-    my $param_list = $func->{param_list}
-    my $param = join(', ', @$param_list)
-    $if !$ret_type
-        push @$open, "SUBROUTINE $name($param)"
-    $else
-        push @$open, "$ret_type FUNCTION $name($param)"
-
-    # -------
-    my $var_hash=$func->{var_hash}
-    my $var_list=$func->{var_list}
-    $call declare_var_list, $pre, $var_hash, @$param_list, @$var_list
-
-    # -------
+subcode: function_close_fortran_style
     push @$close, "END"
     push @$close, "NEWLINE"
 
-subcode: declare_var_list(out, hash, @list)
-    my %type_list
-    $foreach $p in $(list)
-        my $type=$(hash)->{$p}->{type}
-        my $dim=$(hash)->{$p}->{dim}
-        my $name=$p
-        $if $dim
-            $if $type eq "CHARACTER"
-                $name.="*$dim"
-            $else
-                $name.="($dim)"
+subcode: function_param_fortran_style
+    my ($type, $name)
+    $if $p=~/(^\S.*)\s+(\S+)\s*$/
+        ($type, $name)=($1, $2)
+    $else
+        $type = get_fortran_type($p)
+        $name = $p
+    push @$param_list, "$type $name"
 
-        $if !$type_list{$type}
-            $type_list{$type}=[]
-        push @{$type_list{$type}}, $name
+subcode: infer_return_fortran_style
+    $call warn, "FORTRAN don't use return"
+    my $name = $cur_function->{name}
+    return "$name = $t"
 
+#----------------------------------------------- 
+fncode: get_fortran_type($p)
+    my $type
+    $if $p=~/^f/i
+        $type=$default_float
+    $elif $p=~/^d/i
+        $type="DOUBLE PRECISION"
+    $elif $p=~/^z/i
+        $type="COMPLEX*16"
+    $elif $p=~/^s/i
+        $type="CHARACTER"
+    $elif $p=~/^[ijklmn]/i
+        $type="INTEGER"
+    $else
+        $type=$default_float
+    return $type
 
-    $foreach %type_list
-        push @$(out), "$k ".join(", ", @$v)
+#----------------------------------------------- 
+fncode: var_declare($v)
+    my $t = "$v->{type} $v->{name}"
+    $if $v->{dim}
+        $if $v->{type} eq "CHARACTER"
+            $t.="*$v->{dim}"
+        $else
+            $t.="($v->{dim})"
+    return $t
 
+fncode: parse_var($name, $type, $value)
+    $if !$value && $name=~/(.*?)\s*=\s*(.*)/
+        ($name, $value) = ($1, $2)
+
+    $if !$type && $name=~/^\s*(\S.*)\s+(\S+)$/
+        ($type, $name)=($1, $2)
+
+    my $var={}
+    $if $name=~/(\w+)\((.*)\)/
+        $var->{dim}=$2
+        $name = $1
+    $var->{name}=$name
+    $var->{type}=$type
+    $var->{init}=$value
+    return $var
+
+fncode: get_var_type($name)
+    return get_var_type_direct($name)
 
