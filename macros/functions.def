@@ -1,41 +1,20 @@
-#---- function styles ----
-macros:
-    function_style: fortran_style
-    scope_return_pattern: ^(exit)
-    function_need_declare: 0
+include: macros_output/functions.def
 
-subcode: function_open_fortran_style
-    my $param_list=$func->{"param_list"}
-    my (@plist, @type_list)
-    $foreach $p in @$param_list
-        $if $p=~/(.+)\s+(\w+)$/
-            push @type_list, $1
-            push @plist, $2
-    my $ret = $func->{ret_type}. " FUNCTION"
-    $if !$ret
-        $ret = "SUBROUTINE"
-    push @$open, "$ret $name(".join(', ', @plist).")"
-    push @$pre, "IMPLICIT NONE"
-    $foreach $p in @$param_list
-        push @$pre, $p
-
-subcode: function_close_fortran_style
-    push @$close, "END"
-    push @$close, "NEWLINE"
-
-subcode: function_param_fortran_style
-    my ($type, $name)
-    $if $p=~/(^\S.*)\s+(\S+)\s*$/
-        ($type, $name)=($1, $2)
-    $else
-        $type = get_fortran_type($p)
-        $name = $p
-    push @$param_list, "$type $name"
-
-subcode: infer_return_fortran_style
-    $call warn, "FORTRAN don't use return"
-    my $name = $cur_function->{name}
-    return "$name = $t"
+subcode:: parsecode_func_other
+    $case $func =~/^(return_type|parameter|lexical)$/
+        $if $cur_function
+            my $func=$cur_function
+            $if $1 eq "return_type"
+                $func->{ret_type}=$param
+            $elif $1 eq "parameter"
+                $call add_function_params, $cur_function
+        return
+    $case $func =~/^(global|local)$/
+        $if $1 eq "global"
+            global_add_var($param)
+        $else
+            local_add_var($param)
+        return
 
 #----------------------------------------------- 
 fncode: get_fortran_type($p)
@@ -55,31 +34,55 @@ fncode: get_fortran_type($p)
     return $type
 
 #----------------------------------------------- 
-fncode: var_declare($v)
-    my $t = "$v->{type} $v->{name}"
-    $if $v->{dim}
-        $if $v->{type} eq "CHARACTER"
-            $t.="*$v->{dim}"
-        $else
-            $t.="($v->{dim})"
-    return $t
+macros:
+    function_style: fortran
 
-fncode: parse_var($name, $type, $value)
-    $if !$value && $name=~/(.*?)\s*=\s*(.*)/
-        ($name, $value) = ($1, $2)
+subcode: function_param_fortran
+    my ($type, $name, $dim)=parse_var($p)
+    $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
+    push @$param_list, $name
 
     $if !$type && $name=~/^\s*(\S.*)\s+(\S+)$/
         ($type, $name)=($1, $2)
 
     my $var={}
     $if $name=~/(\w+)\((.*)\)/
-        $var->{dim}=$2
-        $name = $1
-    $var->{name}=$name
-    $var->{type}=$type
-    $var->{init}=$value
-    return $var
+        $name=$1
+        $dim =$2
+    return ($type, $name, $dim)
 
-fncode: get_var_type($name)
-    return get_var_type_direct($name)
+subcode: function_open_fortran
+    my $ret_type = $func->{ret_type}
+    my $param_list = $func->{param_list}
+    my $param = join(', ', @$param_list)
+    $if !$ret_type
+        push @$open, "SUBROUTINE $name($param)"
+    $else
+        push @$open, "$ret_type FUNCTION $name($param)"
+
+subcode: function_close_fortran
+    push @$close, "END"
+    push @$close, "NEWLINE"
+
+subcode: infer_return_fortran
+# ----------------------------
+subcode: declare_var_list(out, hash, @list)
+    my %type_list
+    $foreach $p in $(list)
+        my $type=$(hash)->{$p}->{type}
+        my $dim=$(hash)->{$p}->{dim}
+        my $name=$p
+        $if $dim
+            $if $type eq "CHARACTER"
+                $name.="*$dim"
+            $else
+                $name.="($dim)"
+
+        $if !$type_list{$type}
+            $type_list{$type}=[]
+        push @{$type_list{$type}}, $name
+
+
+    $foreach %type_list
+        push @$(out), "$k ".join(", ", @$v)
 

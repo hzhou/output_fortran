@@ -13,6 +13,7 @@ page: output_fortran, output_main
     output_dir: lib/MyDef
     ext: f
     package: MyDef::output_fortran
+    autolist: 1
 
 
 subcode: init_page
@@ -64,7 +65,7 @@ subcode: parsecode
     $elif $l=~/^NOOP POST_MAIN/
         push @$out, "END"
         push @$out, "NEWLINE"
-        $call function_list_all
+        $call autolist_functions, add
         $call @parsecode_post
         return 0
 
@@ -89,6 +90,65 @@ subcode: else_fortran_style
     $call push_indented_block
 
 #----------------------------------------------- 
+<<<<<<< HEAD
+=======
+subcode: dumpout
+    $foreach $func in @function_list
+        process_function_std($func)
+    $call process_link_objects
+
+    my @out2
+    $dump->{f}=\@out2
+    push @out2, "PROGRAM $page->{pagename}"
+    $call declare_var_list, out2, $global_hash, @$global_list
+    MyDef::dumpout::dumpout($dump)
+
+    my $label
+    $foreach $l in @out2
+        $(if:1)
+            chomp $l
+            $call filter_f77_line
+        $(else)
+            push @$f, $l
+    return
+
+    subcode: filter_f77_line
+        $if $l=~/^\s*LABEL\s+(\d+)/
+            $label=sprintf("%5d ", $1)
+        $else
+            my $prefix
+            $if $label
+                $prefix=$label
+                undef $label
+            $else
+                $prefix=' ' x 6
+
+            $if length($l)>72-6
+                my $line_list = fortran_break_line($l)
+                $foreach $l2 in @$line_list
+                    push @$f, "$prefix$l2\n"
+                    $prefix = '     &'
+            $else
+                push @$f, "$prefix$l\n"
+
+    subcode: process_link_objects
+        my @objlist
+        my @liblist
+        $foreach $i in keys %objects
+            $if $i=~/^lib(.*)/
+                push @liblist, "-l$1"
+            $else
+                push @objlist, $i
+        my ($lib_list, $obj_list)
+        $if @liblist
+            $lib_list=join(" ", @liblist)
+            $page->{lib_list}=$lib_list
+        $if @objlist
+            $obj_list=join(" ", @objlist)
+            $page->{lib_list}.=" ".$obj_list
+
+#----------------------------------------------- 
+>>>>>>> 8757a5f5b82af57bb608e77aa3a1aa59ea0e1d20
 fncode: fortran_break_line($l)
     my $limit = 72-6
     my ($indent, $indent_size)
