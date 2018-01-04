@@ -1,0 +1,80 @@
+macros:
+    F77: 1
+
+#---- ref: macros/dumpout.def ----
+subcode: dump_f77_line
+    $if length($l)>72-6
+        my $line_list = fortran_break_line($l)
+        $foreach $l2 in @$line_list
+            push @$f, "$prefix$l2\n"
+            $prefix = '     &'
+    $else
+        push @$f, "$prefix$l\n"
+
+fncode: fortran_break_line($l)
+    my $limit = 72-6
+    my ($indent, $indent_size)
+    $if $l=~/^(\s*)/
+        $indent_size = length($1)+2
+        $indent = ' ' x $indent_size
+
+    my $limit = 72-6
+    my @line_list
+    my $len = length($l)
+    my $i = 0
+    $while $i<$len
+        my $j = $i+$limit-1
+        $if $indent
+            $j -= $indent_size
+            $call @check_j_limit
+
+        $if $j>$len
+            $j=$len
+        $else
+            $call get_better_break
+
+        $if $i==0 or !$indent
+            push @line_list, substr($l, $i, $j-$i)
+        $else
+            push @line_list, $indent.substr($l, $i, $j-$i)
+        $i=$j
+
+    return \@line_list
+
+    # -------------------
+    subcode: check_j_limit
+        $if $j-$i <20
+            $indent_size=2
+            $indent = ' ' x $indent_size
+            $j=$i+$limit -1
+
+
+    subcode: get_better_break
+        my $no_indent=1
+        my $last_type
+        $for $k=0:10
+            my $type
+            $(enumset:space,word,paren,break,other)
+            my $c = substr($l, $j-$k, 1)
+            $if $c eq ','
+                $type=$(break)
+            $elif $c eq ' '
+                $type=$(space)
+            $elif $c =~/[\(\[\{\}\]\)]/
+                $type=$(paren)
+            $elif $c=~/\w/
+                $type=$(word)
+            $else
+                $type=$(other)
+            $if $type==$(break) or $last_type && $type != $last_type
+                $j=$j-$k+1
+                $no_indent=0
+                last
+            $last_type = $type
+
+        $call @check_no_indent
+
+        subcode: check_no_indent
+            $if $no_indent
+                $indent_size=0
+                undef $indent

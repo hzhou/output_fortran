@@ -1,0 +1,95 @@
+subcode: _autoload
+    $global %type_name, %type_prefix
+    %type_name=(
+        c=>"CHARACTER",
+        d=>"DOUBLE PRECISION",
+        f=>"REAL",
+        i=>"INTEGER",
+        j=>"INTEGER",
+        k=>"INTEGER",
+        l=>"INTEGER",
+        m=>"INTEGER",
+        n=>"INTEGER",
+        count=>"INTEGER",
+        size=>"INTEGER",
+    );
+    %type_prefix=(
+        i=>"INTEGER",
+        n=>"INTEGER",
+        n1=>"INTEGER(kind=1)",
+        n2=>"INTEGER(kind=2)",
+        n4=>"INTEGER(kind=4)",
+        n8=>"INTEGER(kind=8)",
+        n16=>"INTEGER(kind=16)",
+        b=>"LOGICAL",
+        s=>"CHARACTER",
+        f=>"REAL",
+        d=>"DOUBLE PRECISION",
+        c=>"COMPLEX",
+        z=>"DOUBLE COMPLEX",
+        "has"=>"LOGICAL",
+        "is"=>"LOGICAL",
+        "do"=>"LOGICAL",
+    );
+
+subcode: update_default_type
+    $global $default_float = "REAL"
+    $if $MyDef::def->{macros}->{use_double} or $page->{use_double}
+        $default_float="DOUBLE PRECISION"
+    $type_prefix{f}=$default_float
+
+macros:
+    type_prefix_char: 
+
+fncode: get_fortran_type($p)
+    $if $p=~/^s(\d+)/
+        return "CHARACTER (len=$1)"
+    my $type = get_type_name($p)
+    $if !$type
+        $type = $default_float
+    return $type
+
+#----------------------------------------------- 
+fncode: parse_var($name, $type, $value)
+    $if !$value
+        $if $name=~/\s*=\s*(\S.*)/
+            $value = $1
+            $name=$`;
+    $(if:1)
+        my $dim
+        $if $name=~/\((.*)\)\s*$/
+            $dim=$1
+            $name=$`;
+    $if !$type
+        $if $name =~ /(\S.*?)\s+(\w+)/
+            $type = $1
+            $name = $2
+        $else
+            $type = get_fortran_type($name)
+    my $var={name=>$name, type=>$type}
+    $if $dim
+        $var->{dim}=$dim
+    $if $value
+        $var->{init}=$value
+    return $var
+
+subcode: dump_vars(l, h, out)
+    my ($type, $line)
+    $foreach $p in @$(l)
+        my $var = $(h)->{$p}
+        $if !$var
+            $var={}
+        $if $type ne $var->{type}
+            $if $line
+                push @$(out), $line
+            $type = $var->{type}
+            $line = "$type :: $p"
+        $else
+            $line .= ", $p"
+        $if $var->{dim}
+            $line .= "($var->{dim})"
+        $if $var->{init}
+            $line .= " = $var->{init}"
+    $if $line
+        push @$(out), $line
+        push @$(out), "\n"
