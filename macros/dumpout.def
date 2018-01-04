@@ -11,40 +11,30 @@ subcode: dumpout
 
     my $label
     $foreach $l in @out2
-        $(if:1)
-            chomp $l
-            $call filter_f77_line
+        $if $l=~/^\s*LABEL\s+(\d+)/
+            $label=sprintf("%5d ", $1)
+            next
+
+        chomp $l
+        my $prefix
+        $if $label
+            $prefix=$label
+            undef $label
+        $else
+            $prefix=' ' x 6
+
+        $(if:F77)
+            $call dump_f77_line
         $(else)
-            push @$f, $l
+            push @$f, "$prefix$l\n"
     return
 
     #------------------------------------------- 
     subcode: dump_globals
-        $if @$global_list
-            $foreach $name in @$global_list
-                my $v = $global_hash->{$name}
-                my $decl = var_declare($v)
-                push @out2, "$decl\n"
-            push @out2, "\n"
-
-    subcode: filter_f77_line
-        $if $l=~/^\s*LABEL\s+(\d+)/
-            $label=sprintf("%5d ", $1)
-        $else
-            my $prefix
-            $if $label
-                $prefix=$label
-                undef $label
-            $else
-                $prefix=' ' x 6
-
-            $if length($l)>72-6
-                my $line_list = fortran_break_line($l)
-                $foreach $l2 in @$line_list
-                    push @$f, "$prefix$l2\n"
-                    $prefix = '     &'
-            $else
-                push @$f, "$prefix$l\n"
+        $call dump_vars, $global_list, $global_hash, out2
+        my $main_list = $main_func->{var_list}
+        my $main_hash = $main_func->{var_hash}
+        $call dump_vars, $main_list, $main_hash, out2
 
     subcode: process_link_objects
         my @objlist

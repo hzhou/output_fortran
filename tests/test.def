@@ -1,17 +1,26 @@
 page: test
     module: fortran
 
-    real dist, vel
-    dist = 15.68323
-    vel  = 0.0270043
+    $list F
+    # real dist, vel
+    $local dist=15.68323, vel=0.0270043
     $print " DISTANCE = %7.4f", dist
     $if vel <1
-        $print " VELOCITY = %7.4f", vel
+        $print " VELOCITY = %8.4f", vel
 
     i=1
-    $while i<10
-        $print " i = %d", i
+    $while i<6
+        $print " while i = %d", i
         i=i+1
+
+    $while
+        $print " loop i = %d", i
+        i=i+1
+        $if i>10
+            exit
+
+    $for i=1:5
+        $print " for i = %d", i
 
     $print " F(4) = %7.4f", F(4.0)
 
@@ -22,4 +31,15 @@ fncode: F(x)
         F=x*x
     $else
         F=x+2.0
+
+fncode: FAC(n)
+    $autolist global
+    $return f
+    $recursive
+
+    $if n==1
+        f = 1
+    $else
+        f = n * FAC(n-1)
+
 

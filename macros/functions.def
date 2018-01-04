@@ -1,13 +1,17 @@
 include: macros_output/functions.def
 
 subcode:: parsecode_func_other
-    $case $func =~/^(return_type|parameter|lexical)$/
-        $if $cur_function
-            my $func=$cur_function
-            $if $1 eq "return_type"
-                $func->{ret_type}=$param
-            $elif $1 eq "parameter"
-                $call add_function_params, $cur_function
+    $case $func =~/^(return_type|return|result|recursive|parameter|lexical)$/
+        $if $1 eq "return" or $1 eq "result"
+            my $var = parse_var($param)
+            $cur_function->{ret_var}= $var
+            $cur_function->{ret_type}=$var->{type}
+        $elif $1 eq "recursive"
+            $cur_function->{recursive}=1
+        $elif $1 eq "return_type"
+            $cur_function->{ret_type}=$param
+        $elif $1 eq "parameter"
+            $call add_function_params, $cur_function
         return
     $case $func =~/^(global|local)$/
         $if $1 eq "global"
@@ -17,48 +21,36 @@ subcode:: parsecode_func_other
         return
 
 #----------------------------------------------- 
-fncode: get_fortran_type($p)
-    my $type
-    $if $p=~/^f/i
-        $type=$default_float
-    $elif $p=~/^d/i
-        $type="DOUBLE PRECISION"
-    $elif $p=~/^z/i
-        $type="COMPLEX*16"
-    $elif $p=~/^s/i
-        $type="CHARACTER"
-    $elif $p=~/^[ijklmn]/i
-        $type="INTEGER"
-    $else
-        $type=$default_float
-    return $type
-
-#----------------------------------------------- 
 macros:
     function_style: fortran
 
 subcode: function_param_fortran
-    my ($type, $name, $dim)=parse_var($p)
-    $var_hash->{$name}={name=>$name, type=>$type, dim=>$dim}
+    my $var=parse_var($p)
+    my $name = $var->{name}
+    $var_hash->{$name}=$var
     push @$param_list, $name
-
-    $if !$type && $name=~/^\s*(\S.*)\s+(\S+)$/
-        ($type, $name)=($1, $2)
-
-    my $var={}
-    $if $name=~/(\w+)\((.*)\)/
-        $name=$1
-        $dim =$2
-    return ($type, $name, $dim)
 
 subcode: function_open_fortran
     my $ret_type = $func->{ret_type}
+    my $ret_var = $func->{ret_var}
     my $param_list = $func->{param_list}
     my $param = join(', ', @$param_list)
-    $if !$ret_type
+    $if !($ret_type or $ret_var)
         push @$open, "SUBROUTINE $name($param)"
+    $elif $ret_var
+        $(set:r=$ret_var->{$1})
+        my $l="FUNCTION $name($param)"
+        $l.= " RESULT($(r:name))"
+        $if $func->{recursive}
+            $l = "RECURSIVE $l"
+        push @$open, $l
+        push @$pre, "$(r:type) :: $(r:name)"
     $else
         push @$open, "$ret_type FUNCTION $name($param)"
+    my $var_list = $func->{var_list}
+    my $var_hash = $func->{var_hash}
+    $call dump_vars, $param_list, $var_hash, $pre
+    $call dump_vars, $var_list, $var_hash, $pre
 
 subcode: function_close_fortran
     push @$close, "END"
