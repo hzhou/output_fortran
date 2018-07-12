@@ -93,3 +93,10 @@ subcode: dump_vars(l, h, out)
     $if $line
         push @$(out), $line
         push @$(out), "\n"
+
+#----------------------------------------------- 
+# MyDef/macros_output/scope.def close_scope
+#     will call var_declare($var, 1)
+# fortran only uses function scope
+fncode: var_declare($var)
+    return undef

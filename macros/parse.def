@@ -1,0 +1,88 @@
+subcode: init_page
+    $global $label_index
+    $label_index=0
+    $call @update_default_type
+    $call function_init
+    $call autolist_functions, add
+
+fncode: get_label
+    $label_index++
+    return sprintf("%d", $label_index*10)
+
+subcode: parsecode
+    $call parsecode_case_support, IF, ELSEIF, fortran_style
+    $call parsecode_common
+
+#---------------------------------------- 
+subcode:: parsecode_special
+    $case $l=~/^NOOP POST_MAIN/
+        $if $out->[0] !~ /^TEMPLATE/
+            unshift @$out, "PROGRAM $page->{_pagename}", "DUMP_STUB global_init"
+            push @$out, "END"
+        push @$out, "NEWLINE"
+        # $call autolist_functions, add
+        $call function_list_all
+        # $call @parsecode_post
+        return
+
+subcode:: parsecode_func
+    $if $func eq "uselib"
+        $global %objects
+        my @tlist = split /,\s*/, $param
+        $foreach $f in @tlist
+            $if $f=~/^\w+$/
+                $objects{"lib$f"}=1
+            $else
+                $objects{$f}=1
+        return
+    $elif $func eq "getlabel"
+        my $s = get_label()
+        $if !$param
+            $param="label"
+        $call set_macro, $param, $s
+        return
+    $elif $func eq "while"
+        $if !$param or $param eq "1"
+            return single_block("DO", "END DO")
+        $else
+            $call filter_cond, $param
+            return single_block("DO WHILE ($param)", "END DO")
+    $elif $func eq "for"
+        $if $param =~/(\w+)\s*=\s*(.*)/ -> $v, $t
+            func_add_var($v, "INTEGER")
+            $if $t=~/^\s*0\b/
+                $call warn, for loop start at 0? (FORTRAN often start at 1)
+            $if $t=~/^\d+$/
+                $t="1, $t"
+            $else
+                $t =~ s/:/, /g
+            $param = "$v = $t"
+        return single_block("DO $param", "END DO")
+    $call @parsecode_func_other
+
+subcode:: parsecode_func_param
+    $call @parsecode_func_param_other
+
+subcode:: parsecode_other
+    $case $l=~/^(.+?)\s*([+\-\*\/])=\s*(.+)/
+        $l = "$1 = $1 $2 $3"
+#---------------------------------------- 
+subcode: filter_cond(cond)
+    $global %op=("=="=>"EQ","<="=>"LE",">="=>"GE","<"=>"LT",">"=>"GT","/="=>"NE","!="=>"NE","&&"=>"AND", "||"=>"OR")
+    $(if:f77)
+        $(cond)=~s/([\/!<>]=|[<>])/.$op{$1}./g
+    $(cond)=~s/(&&|\|\||!=)/.$op{$1}./g
+
+subcode: case_fortran_style
+    $call filter_cond, $cond
+    push @src, "$case ($cond) THEN"
+    $call push_indented_block
+    $if $case eq "IF"
+        $if !$case_wrap
+            $case_wrap=[]
+        push @$case_wrap, "END IF"
+
+subcode: else_fortran_style
+    push @src, "ELSE"
+    $call push_indented_block
+

@@ -5,29 +5,18 @@ include: macros_output/functions.def
 include: macros_output/scope.def
 include: macros_output/variables.def
 include: macros_output/types.def
-# include: macros/f77.def
 include: macros/parse.def
+include: macros/dumpout.def
 include: macros/functions.def
 include: macros/variables.def
 include: macros/print.def
 
-page: output_fortran, output_main
+page: output_f90, output_main
     output_dir: lib/MyDef
-    ext: f
-    package: MyDef::output_fortran
+    ext: f90
+    package: MyDef::output_f90
     autolist: 1
 
-subcode: modeswitch
-    # template do not need prefix 7 spaces, so mark it for dumpout
-    $global $in_template
-    $if $mode eq "template"
-        $if !$in_template
-            $in_template=1
-            push @$out, "TEMPLATE START"
-    $else
-        $if $in_template
-            $in_template=0
-            push @$out, "TEMPLATE STOP"
 
 #----------------------------------------------- 
 subcode: dumpout
@@ -35,42 +24,10 @@ subcode: dumpout
         process_function_std($func)
     $call process_link_objects
 
-    my @out2
-    $dump->{f}=\@out2
-
     my $global_init=MyDef::compileutil::get_named_block("global_init")
     $call dump_globals, $global_init
     MyDef::dumpout::dumpout($dump)
 
-    # filter lines to prefix 7 spaces and labels
-    my ($label, $is_template)
-    $foreach $l in @out2
-        $if $l=~/^\s*LABEL\s+(\d+)/
-            $label=sprintf("%5d ", $1)
-            next
-        $elif $l=~/^\s*TEMPLATE\s+(START|STOP)/
-            $if $1 eq "START"
-                $is_template = 1
-            $else
-                $is_template = undef
-            next
-        $elif $is_template
-            push @$f, $l
-            next
-
-        # label and leading 6 spaces
-        chomp $l
-        my $prefix
-        $if $label
-            $prefix=$label
-            undef $label
-        $else
-            $prefix=' ' x 6
-
-        $(if:F77)
-            $call dump_f77_line
-        $(else)
-            push @$f, "$prefix$l\n"
     return
 
     #------------------------------------------- 

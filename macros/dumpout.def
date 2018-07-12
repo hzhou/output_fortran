@@ -5,16 +5,28 @@ subcode: dumpout
 
     my @out2
     $dump->{f}=\@out2
-    push @out2, "PROGRAM $page->{_pagename}"
-    $call dump_globals
+
+    my $global_init=MyDef::compileutil::get_named_block("global_init")
+    $call dump_globals, $global_init
     MyDef::dumpout::dumpout($dump)
 
-    my $label
+    # filter lines to prefix 7 spaces and labels
+    my ($label, $is_template)
     $foreach $l in @out2
         $if $l=~/^\s*LABEL\s+(\d+)/
             $label=sprintf("%5d ", $1)
             next
+        $elif $l=~/^\s*TEMPLATE\s+(START|STOP)/
+            $if $1 eq "START"
+                $is_template = 1
+            $else
+                $is_template = undef
+            next
+        $elif $is_template
+            push @$f, $l
+            next
 
+        # label and leading 6 spaces
         chomp $l
         my $prefix
         $if $label
@@ -30,11 +42,11 @@ subcode: dumpout
     return
 
     #------------------------------------------- 
-    subcode: dump_globals
-        $call dump_vars, $global_list, $global_hash, out2
+    subcode: dump_globals(out)
+        $call dump_vars, $global_list, $global_hash, $(out)
         my $main_list = $main_func->{var_list}
         my $main_hash = $main_func->{var_hash}
-        $call dump_vars, $main_list, $main_hash, out2
+        $call dump_vars, $main_list, $main_hash, $(out)
 
     subcode: process_link_objects
         my @objlist
