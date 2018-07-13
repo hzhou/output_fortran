@@ -2,7 +2,6 @@ subcode: init_page
     $global $label_index
     $label_index=0
     $call @update_default_type
-    $call function_init
     $call autolist_functions, add
 
 fncode: get_label
@@ -14,17 +13,6 @@ subcode: parsecode
     $call parsecode_common
 
 #---------------------------------------- 
-subcode:: parsecode_special
-    $case $l=~/^NOOP POST_MAIN/
-        $if $out->[0] !~ /^TEMPLATE/
-            unshift @$out, "PROGRAM $page->{_pagename}", "DUMP_STUB global_init"
-            push @$out, "END"
-        push @$out, "NEWLINE"
-        # $call autolist_functions, add
-        $call function_list_all
-        # $call @parsecode_post
-        return
-
 subcode:: parsecode_func
     $if $func eq "uselib"
         $global %objects
@@ -41,6 +29,8 @@ subcode:: parsecode_func
             $param="label"
         $call set_macro, $param, $s
         return
+    $elif $func eq "loop"
+        return single_block("DO", "END DO")
     $elif $func eq "while"
         $if !$param or $param eq "1"
             return single_block("DO", "END DO")
@@ -66,6 +56,9 @@ subcode:: parsecode_func_param
 subcode:: parsecode_other
     $case $l=~/^(.+?)\s*([+\-\*\/])=\s*(.+)/
         $l = "$1 = $1 $2 $3"
+    $case $l=~/^call\s+(\w+)/
+        $call add_list_function, $1
+        
 #---------------------------------------- 
 subcode: filter_cond(cond)
     $global %op=("=="=>"EQ","<="=>"LE",">="=>"GE","<"=>"LT",">"=>"GT","/="=>"NE","!="=>"NE","&&"=>"AND", "||"=>"OR")

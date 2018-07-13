@@ -51,6 +51,7 @@ subcode: function_open_fortran
     my $var_hash = $func->{var_hash}
     $call dump_vars, $param_list, $var_hash, $pre
     $call dump_vars, $var_list, $var_hash, $pre
+    @$var_list=() # so close_scope won't declare them again
 
 subcode: function_close_fortran
     push @$close, "END"

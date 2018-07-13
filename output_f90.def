@@ -6,7 +6,6 @@ include: macros_output/scope.def
 include: macros_output/variables.def
 include: macros_output/types.def
 include: macros/parse.def
-include: macros/dumpout.def
 include: macros/functions.def
 include: macros/variables.def
 include: macros/print.def
@@ -17,25 +16,62 @@ page: output_f90, output_main
     package: MyDef::output_f90
     autolist: 1
 
+macros: 
+    add_vars: global|local|const
+
+subcode:: parse_add_var_cases
+    $case $func eq "const"
+        my $var = global_add_var($(v))
+        $var->{parameter} = 1
+
+subcode:: parsecode_special
+    $case $l=~/^NOOP POST_MAIN/
+        # $call autolist_functions, add
+        $call function_list_all
+        return
 
 #----------------------------------------------- 
 subcode: dumpout
-    $foreach $func in @function_list
-        process_function_std($func)
+    $call process_functions
     $call process_link_objects
 
     my $global_init=MyDef::compileutil::get_named_block("global_init")
     $call dump_globals, $global_init
+    $call declare_functions, $global_init
+
     MyDef::dumpout::dumpout($dump)
 
     return
 
     #------------------------------------------- 
+    subcode: process_functions
+        $foreach $func in @function_list
+            process_function_std($func)
+            unshift @{$func->{preblock}}, "IMPLICIT NONE"
+
     subcode: dump_globals(out)
         $call dump_vars, $global_list, $global_hash, $(out)
         my $main_list = $main_func->{var_list}
         my $main_hash = $main_func->{var_hash}
         $call dump_vars, $main_list, $main_hash, $(out)
+
+    subcode: declare_functions(out)
+        my ($count, $last_type)
+        $foreach $func in @function_list
+            my $ret_type = $func->{ret_type}
+            my $ret_var = $func->{ret_var}
+            $if !$ret_type and $ret_var
+                $ret_type = $ret_var->{type}
+            $if $ret_type
+                my $name = $func->{name}
+                $if $last_type eq $ret_type
+                    $$(out)[-1].=", $name"
+                $else
+                    push @$(out), $ret_type.":: $name"
+                    $last_type = $ret_type
+                $count++
+        $if $count>0
+            push @$(out), "!----"
 
     subcode: process_link_objects
         my @objlist

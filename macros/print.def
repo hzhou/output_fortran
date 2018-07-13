@@ -1,14 +1,10 @@
 fncode: fortran_write($fmt, $vlist)
     $call get_print_to
     $if $fmt
-        my $label = get_label()
-        # push @$out, "Print $label, $vlist"
-        push @$out, "WRITE($print_to, $label) $vlist"
-        $(if:ext=f90)
-            push @$out, "$label Format ($fmt)"
-        $(else)
-            push @$out, "LABEL $label"
-            push @$out, "Format ($fmt)"
+        $if $fmt!~/'/
+            push @$out, "WRITE($print_to, '($fmt)') $vlist"
+        $else
+            $call write_format
     $else
         push @$out, "WRITE($print_to, *) $vlist"
 
@@ -17,11 +13,24 @@ fncode: fortran_write($fmt, $vlist)
         $if !$print_to
             $print_to = '*'
 
+    subcode: write_format
+        my $label = get_label()
+        # push @$out, "Print $label, $vlist"
+        push @$out, "WRITE($print_to, $label) $vlist"
+        $(if:ext=f90)
+            push @$out, "$label Format ($fmt)"
+        $(else)
+            push @$out, "LABEL $label"
+            push @$out, "Format ($fmt)"
+
 #---------------------------------------- 
 subcode:: parsecode_func_other
     $case $func eq "print"
-        $if $param=~/^"(.*)",(.*)/
-            my ($fmt, $vlist)=parse_fmt($1, $2)
+        $if $param=~/^'(.*?)',(.*)/
+            fortran_write($1, $2)
+            return
+        $if $param=~/^"(.*?)",(.*)/
+            my ($fmt, $vlist)=parse_fmt_2($1, $2)
             fortran_write($fmt, $vlist)
             return
         $elif $param=~/^(.*?);\s*(.*)/
@@ -53,7 +62,7 @@ fncode: dump_param($param)
             push @segs, $p
     return join(", ", @segs)
 
-fncode: parse_fmt($s_fmt, $s_vlist)
+fncode: parse_fmt_2($s_fmt, $s_vlist)
     my @fmt_list
     my @segs = split /(%[0-9\.]*[fgd])/, $s_fmt
     $foreach $s in @segs

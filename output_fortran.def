@@ -29,6 +29,17 @@ subcode: modeswitch
             $in_template=0
             push @$out, "TEMPLATE STOP"
 
+subcode:: parsecode_special
+    $case $l=~/^NOOP POST_MAIN/
+        $if $out->[0] !~ /^TEMPLATE/
+            unshift @$out, "PROGRAM $page->{_pagename}", "DUMP_STUB global_init"
+            push @$out, "END"
+        push @$out, "NEWLINE"
+        # $call autolist_functions, add
+        $call function_list_all
+        # $call @parsecode_post
+        return
+
 #----------------------------------------------- 
 subcode: dumpout
     $foreach $func in @function_list

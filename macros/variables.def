@@ -55,11 +55,10 @@ fncode: parse_var($name, $type, $value)
         $if $name=~/\s*=\s*(\S.*)/
             $value = $1
             $name=$`;
-    $(if:1)
-        my $dim
-        $if $name=~/\((.*)\)\s*$/
-            $dim=$1
-            $name=$`;
+    my $dim
+    $if $name=~/\((.*)\)\s*$/
+        $dim=$1
+        $name=$`;
     $if !$type
         $if $name =~ /(\S.*?)\s+(\w+)/
             $type = $1
@@ -67,33 +66,48 @@ fncode: parse_var($name, $type, $value)
         $else
             $type = get_fortran_type($name)
     my $var={name=>$name, type=>$type}
+    # $print parse_var [$name] [$type]
     $if $dim
-        $var->{dim}=$dim
+        $if $type =~/CHARACTER/
+            $var->{type}.=" (len=$dim)"
+        $else
+            $var->{dim}=$dim
     $if $value
         $var->{init}=$value
     return $var
 
 subcode: dump_vars(l, h, out)
-    my ($type, $line)
+    my $last_type
     $foreach $p in @$(l)
+        $call get_var
+        $call get_type
+        $call get_l
+        $if $type ne $last_type
+            push @$(out), "$type :: $l"
+            $last_type = $type
+        $else
+            $(out)->[-1] .= ", $l"
+    $if $last_type
+        push @$(out), "\n"
+
+    subcode: get_var
         my $var = $(h)->{$p}
         $if !$var
             $var={}
-        $if $type ne $var->{type}
-            $if $line
-                push @$(out), $line
-            $type = $var->{type}
-            $line = "$type :: $p"
-        $else
-            $line .= ", $p"
-        $if $var->{dim}
-            $line .= "($var->{dim})"
-        $if $var->{init}
-            $line .= " = $var->{init}"
-    $if $line
-        push @$(out), $line
-        push @$(out), "\n"
 
+    subcode: get_type
+        my $type = $var->{type}
+        $if $var->{parameter}
+            $type.=", PARAMETER"
+        $if $var->{dim}=~/:/
+            $type.=", ALLOCATABLE"
+
+    subcode: get_l
+        my $l = $p
+        $if $var->{dim}
+            $l.= "($var->{dim})"
+        $if $var->{init}
+            $l.= " = $var->{init}"
 #----------------------------------------------- 
 # MyDef/macros_output/scope.def close_scope
 #     will call var_declare($var, 1)
