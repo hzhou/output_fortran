@@ -14,6 +14,7 @@ include: macros/print.def
 page: output_fortran, output_main
     output_dir: lib/MyDef
     ext: f
+    type: pm
     package: MyDef::output_fortran
     autolist: 1
 
@@ -42,6 +43,8 @@ subcode:: parsecode_special
 
 #----------------------------------------------- 
 subcode: dumpout
+    my $global_init=MyDef::compileutil::get_named_block("global_init")
+
     $foreach $func in @function_list
         process_function_std($func)
     $call process_link_objects
@@ -49,8 +52,17 @@ subcode: dumpout
     my @out2
     $dump->{f}=\@out2
 
-    my $global_init=MyDef::compileutil::get_named_block("global_init")
+    push @$global_init, "implicit none\n"
+    $foreach $f in @includes
+        push @$global_init, "include '$f'\n"
+    push @$global_init, "\n"
+
+    $foreach $func in @function_list
+        $if $func->{ret_type}
+            push @$global_init, "$func->{ret_type}:: $func->{name}\n"
+
     $call dump_globals, $global_init
+
     MyDef::dumpout::dumpout($dump)
 
     # filter lines to prefix 7 spaces and labels

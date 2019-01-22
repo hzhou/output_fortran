@@ -23,6 +23,12 @@ subcode:: parsecode_func
             $else
                 $objects{$f}=1
         return
+    $elif $func eq "include"
+        $global @includes
+        my @tlist = split /,\s*/, $param
+        $foreach $f in @tlist
+            push @includes, $f
+        return
     $elif $func eq "getlabel"
         my $s = get_label()
         $if !$param
@@ -66,16 +72,16 @@ subcode: filter_cond(cond)
         $(cond)=~s/([\/!<>]=|[<>])/.$op{$1}./g
     $(cond)=~s/(&&|\|\||!=)/.$op{$1}./g
 
-subcode: case_fortran_style
+subcode: if_fortran_style
     $call filter_cond, $cond
-    push @src, "$case ($cond) THEN"
-    $call push_indented_block
-    $if $case eq "IF"
-        $if !$case_wrap
-            $case_wrap=[]
-        push @$case_wrap, "END IF"
+    $call push_single_block, "IF ($cond) THEN", "END IF"
+
+subcode: elif_fortran_style
+    $call filter_cond, $cond
+    $call else_merge, END IF
+    $call push_single_block, "ELSE IF ($cond) THEN", "END IF"
 
 subcode: else_fortran_style
-    push @src, "ELSE"
-    $call push_indented_block
+    $call else_merge, END IF
+    $call push_single_block, "ELSE", "END IF"
 

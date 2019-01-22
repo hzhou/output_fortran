@@ -13,6 +13,7 @@ include: macros/print.def
 page: output_f90, output_main
     output_dir: lib/MyDef
     ext: f90
+    type: pm
     package: MyDef::output_f90
     autolist: 1
 
