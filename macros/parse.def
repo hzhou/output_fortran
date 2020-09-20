@@ -66,16 +66,16 @@ subcode: filter_cond(cond)
         $(cond)=~s/([\/!<>]=|[<>])/.$op{$1}./g
     $(cond)=~s/(&&|\|\||!=)/.$op{$1}./g
 
-subcode: case_fortran_style
+subcode: if_fortran_style
     $call filter_cond, $cond
-    push @src, "$case ($cond) THEN"
-    $call push_indented_block
-    $if $case eq "IF"
-        $if !$case_wrap
-            $case_wrap=[]
-        push @$case_wrap, "END IF"
+    $call push_single_block, "IF ($cond) THEN", "ENDIF"
+
+subcode: elif_fortran_style
+    $call filter_cond, $cond
+    $call else_merge, END IF
+    $call push_single_block, "ELSEIF ($cond) THEN", "ENDIF"
 
 subcode: else_fortran_style
-    push @src, "ELSE"
-    $call push_indented_block
+    $call else_merge, END IF
+    $call push_single_block, "ELSE", "END IF"
 
