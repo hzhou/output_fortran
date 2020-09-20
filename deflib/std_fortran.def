@@ -1,0 +1,5 @@
+subcode: basic_frame
+    PROGRAM $(_pagename)
+        IMPLICIT NONE
+        $call main
+    END PROGRAM
