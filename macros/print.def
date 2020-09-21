@@ -1,54 +1,57 @@
-fncode: fortran_write($fmt, $vlist)
-    $call get_print_to
-    $if $fmt
-        $if $fmt!~/'/
-            push @$out, "WRITE($print_to, '($fmt)') $vlist"
-        $else
-            $call write_format
-    $else
-        push @$out, "WRITE($print_to, *) $vlist"
-
-    subcode: get_print_to
-        my $print_to = MyDef::compileutil::get_macro_word("print_to", 1)
-        $if !$print_to
-            $print_to = '*'
-
-    subcode: write_format
-        my $label = get_label()
-        # push @$out, "Print $label, $vlist"
-        push @$out, "WRITE($print_to, $label) $vlist"
-        $(if:ext=f90)
-            push @$out, "$label Format ($fmt)"
-        $(else)
-            push @$out, "LABEL $label"
-            push @$out, "Format ($fmt)"
-
-#---------------------------------------- 
 subcode:: parsecode_func_other
     $case $func eq "print"
-        $if $param=~/^'(.*?)',(.*)/
+        $if $param=~/^"(.*)",\s*(.*)/
             fortran_write($1, $2)
-            return
-        $if $param=~/^"(.*?)",(.*)/
-            my ($fmt, $vlist)=parse_fmt_2($1, $2)
-            fortran_write($fmt, $vlist)
-            return
-        $elif $param=~/^(.*?);\s*(.*)/
-            fortran_write($2, $1)
-            return
         $else
-            fortran_write(undef, $param)
-            return
+            fortran_write($param)
+        return
     $case $func eq "dump"
         my $t = dump_param($param)
         fortran_write(undef, $t)
         return
 
 subcode:: parsecode_func_param_other
+    $case $func eq "print"
+        fortran_write($param1, $param2, 1)
+        return
     $case $func eq "dump"
         my $t = dump_param($param2)
         fortran_write(undef, "'[$param1] ',".$t)
         return
+
+#---------------------------------------- 
+fncode: fortran_write($fmt, $vlist, $use_format)
+    my $format='*'
+    $if $fmt
+        $if $use_format
+            $call direct_format_label
+        $else
+            ($format, $vlist) = parse_fmt_2($fmt, $vlist)
+
+    $call get_print_to
+    $if $print_to eq '*'
+        push @$out, "PRINT $format, $vlist"
+    $else
+        push @$out, "WRITE($print_to, $format) $vlist"
+
+    $if $use_format
+        $call output_direct_format
+
+    subcode: get_print_to
+        my $print_to = MyDef::compileutil::get_macro_word("print_to", 1)
+        $if !$print_to
+            $print_to = '*'
+
+    subcode: direct_format_label
+        my $label = get_label()
+        $format = $label
+
+    subcode: output_direct_format
+        $(if:ext=f90)
+            push @$out, "$format Format($fmt)"
+        $(else)
+            push @$out, "LABEL $format"
+            push @$out, "Format ($fmt)"
 
 fncode: dump_param($param)
     my @plist=split /,\s*/, $param
@@ -64,7 +67,9 @@ fncode: dump_param($param)
 
 fncode: parse_fmt_2($s_fmt, $s_vlist)
     my @fmt_list
+    my @vlist = split /,\s*/, $s_vlist
     my @segs = split /(%[0-9\.]*[fgd])/, $s_fmt
+    my @out_vlist
     $foreach $s in @segs
         $if $s=~/^%(.*)([fgd])/
             my ($w, $f)=($1, $2)
@@ -76,6 +81,17 @@ fncode: parse_fmt_2($s_fmt, $s_vlist)
                 push @fmt_list, "E$w"
             $elif $f eq "d"
                 push @fmt_list, "I$w"
+            push @out_vlist, shift @vlist
+        $elif $s=~/^\$(\w+)/
+            my $type = get_var_type_direct($1)
+            $if $type=~/^INTEGER/
+                push @fmt_list, "I6"
+            $elif $type=~/^(REAL|DOUBLE)/
+                push @fmt_list, "F10.4"
+            push @out_vlist, $1
         $else
             push @fmt_list, "'$s'"
-    return (join(",", @fmt_list), $s_vlist)
+    $if !@out_vlist
+        return ('*', join(", ", @fmt_list))
+    $else
+        return (join(",", @fmt_list), join(", ", @out_vlist))
