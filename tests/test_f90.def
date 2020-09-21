@@ -1,4 +1,4 @@
 page: test
     module: f90
 
-    $print 'Hello World!'
+    $print Hello World!
