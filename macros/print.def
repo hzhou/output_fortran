@@ -2,6 +2,8 @@ subcode:: parsecode_func_other
     $case $func eq "print"
         $if $param=~/^"(.*)",\s*(.*)/
             fortran_write($1, $2)
+        $elif $param=~/^"(.*)"$/
+            fortran_write($1, "")
         $else
             fortran_write($param)
         return
@@ -12,11 +14,22 @@ subcode:: parsecode_func_other
 
 subcode:: parsecode_func_param_other
     $case $func eq "print"
+        # explicit: e.g $print(1X,A,F4.2) 'pi=', pi
         fortran_write($param1, $param2, 1)
         return
     $case $func eq "dump"
-        my $t = dump_param($param2)
-        fortran_write(undef, "'[$param1] ',".$t)
+        # explict: e.g. $print(F4.2) pi
+        my @flist=split /,\s*/, $param1
+        my @tlist=split /,\s*/, $param2
+        my (@f, @t)
+        $foreach @flist
+            push @f, 'A'
+            push @f, $_
+        $foreach @tlist
+            push @t, "', $_ = '"
+            push @t, $_
+        $t[0]=~s/^', /'/
+        fortran_write(join(',',@f), join(', ', @t), 1)
         return
 
 #---------------------------------------- 
@@ -24,7 +37,10 @@ fncode: fortran_write($fmt, $vlist, $use_format)
     my $format='*'
     $if $fmt
         $if $use_format
-            $call direct_format_label
+            $(if:0)
+                $call direct_format_label
+            $(else)
+                $format = "'($fmt)'"
         $else
             ($format, $vlist) = parse_fmt_2($fmt, $vlist)
 
@@ -34,8 +50,9 @@ fncode: fortran_write($fmt, $vlist, $use_format)
     $else
         push @$out, "WRITE($print_to, $format) $vlist"
 
-    $if $use_format
-        $call output_direct_format
+    $(if:0)
+        $if $use_format
+            $call output_direct_format
 
     subcode: get_print_to
         my $print_to = MyDef::compileutil::get_macro_word("print_to", 1)
@@ -68,30 +85,42 @@ fncode: dump_param($param)
 fncode: parse_fmt_2($s_fmt, $s_vlist)
     my @fmt_list
     my @vlist = split /,\s*/, $s_vlist
-    my @segs = split /(%[0-9\.]*[fgd])/, $s_fmt
+    my @segs = split /(%[0-9\.]*[fgd]|\$\w+)/, $s_fmt
     my @out_vlist
-    $foreach $s in @segs
-        $if $s=~/^%(.*)([fgd])/
-            my ($w, $f)=($1, $2)
-            $if !$w
-                $w = 6
-            $if $f eq "f"
-                push @fmt_list, "F$w"
-            $elif $f eq "g"
-                push @fmt_list, "E$w"
-            $elif $f eq "d"
-                push @fmt_list, "I$w"
-            push @out_vlist, shift @vlist
-        $elif $s=~/^\$(\w+)/
-            my $type = get_var_type_direct($1)
-            $if $type=~/^INTEGER/
-                push @fmt_list, "I6"
-            $elif $type=~/^(REAL|DOUBLE)/
-                push @fmt_list, "F10.4"
-            push @out_vlist, $1
+    $if @segs == 1 && !$s_vlist
+        $if $s_fmt!~/"/
+            return ('*', "\"$s_fmt\"")
         $else
-            push @fmt_list, "'$s'"
+            return ('*', "'$s_fmt'")
+    $else
+        $foreach $s in @segs
+            $if $s=~/^$/
+                next
+            $elif $s=~/^%(.*)([fgd])/
+                my ($w, $f)=($1, $2)
+                $if !$w
+                    $w = 6
+                $if $f eq "f"
+                    push @fmt_list, "F$w"
+                $elif $f eq "g"
+                    push @fmt_list, "E$w"
+                $elif $f eq "d"
+                    push @fmt_list, "I$w"
+                push @out_vlist, shift @vlist
+            $elif $s=~/^\$(\w+)/ -> $v
+                my $type = get_var_type_direct($v)
+                $if $type=~/^INTEGER/
+                    push @fmt_list, "I6"
+                $elif $type=~/^(REAL|DOUBLE)/
+                    push @fmt_list, "F10.4"
+                push @out_vlist, $v
+            $else
+                push @fmt_list, "A"
+                push @out_vlist, "'$s'"
     $if !@out_vlist
+        /* expression list */
         return ('*', join(", ", @fmt_list))
     $else
-        return (join(",", @fmt_list), join(", ", @out_vlist))
+        /* formatted output */
+        my $fmt = join(",", @fmt_list)
+        return ("'($fmt)'", join(", ", @out_vlist))

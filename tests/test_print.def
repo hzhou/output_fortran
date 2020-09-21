@@ -1,0 +1,16 @@
+page: test
+    module: f90
+
+    $local n = 10, pi = 3.14
+
+    $print Test print...
+    $print $pi
+    $print n = $n, pi = $pi     # default F10.4
+    $print " n = $n, pi = $pi"  # default F10.4
+    $print " n = $n, pi = %4.2f", pi
+    $print(1X,A,I2,A,F4.2) 'n = ', n, ', pi = ', pi
+
+    $print
+    $print Test dump...
+    $dump n, pi
+    $dump(I2, F4.2) n, pi

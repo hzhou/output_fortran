@@ -26,6 +26,9 @@ subcode:: parse_add_var_cases
         $var->{parameter} = 1
 
 subcode:: parsecode_special
+    $case $l=~/^PROGRAM\b/i
+        push @scope_stack, $cur_scope
+        $cur_scope = $main_func
     $case $l=~/^NOOP POST_MAIN/
         # $call autolist_functions, add
         $call function_list_all
