@@ -68,7 +68,7 @@ fncode: parse_var($name, $type, $value)
     my $var={name=>$name, type=>$type}
     # $print parse_var [$name] [$type]
     $if $dim
-        $if $type =~/CHARACTER/
+        $if $type =~/CHARACTER/i
             $var->{type}.=" (len=$dim)"
         $else
             $var->{dim}=$dim

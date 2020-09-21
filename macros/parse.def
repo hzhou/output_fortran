@@ -23,6 +23,12 @@ subcode:: parsecode_func
             $else
                 $objects{$f}=1
         return
+    $elif $func eq "include"
+        $global @includes
+        my @tlist = split /,\s*/, $param
+        $foreach $f in @tlist
+            push @includes, $f
+        return
     $elif $func eq "getlabel"
         my $s = get_label()
         $if !$param
@@ -68,12 +74,12 @@ subcode: filter_cond(cond)
 
 subcode: if_fortran_style
     $call filter_cond, $cond
-    $call push_single_block, "IF ($cond) THEN", "ENDIF"
+    $call push_single_block, "IF ($cond) THEN", "END IF"
 
 subcode: elif_fortran_style
     $call filter_cond, $cond
     $call else_merge, END IF
-    $call push_single_block, "ELSEIF ($cond) THEN", "ENDIF"
+    $call push_single_block, "ELSE IF ($cond) THEN", "END IF"
 
 subcode: else_fortran_style
     $call else_merge, END IF
