@@ -1,0 +1,4 @@
+page: test
+    module: f90
+
+    $print 'Hello World!'

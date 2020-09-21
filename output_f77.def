@@ -1,0 +1,109 @@
+include: output.def
+include: macros_output/case.def
+include: macros_output/for.def
+include: macros_output/functions.def
+include: macros_output/scope.def
+include: macros_output/variables.def
+include: macros_output/types.def
+# include: macros/f77.def
+include: macros/parse.def
+include: macros/functions.def
+include: macros/variables.def
+include: macros/print.def
+
+page: output_f77, output_main
+    output_dir: lib/MyDef
+    ext: f
+    package: MyDef::output_f77
+    autolist: 1
+
+subcode: modeswitch
+    # template do not need prefix 7 spaces, so mark it for dumpout
+    $global $in_template
+    $if $mode eq "template"
+        $if !$in_template
+            $in_template=1
+            push @$out, "TEMPLATE START"
+    $else
+        $if $in_template
+            $in_template=0
+            push @$out, "TEMPLATE STOP"
+
+subcode:: parsecode_special
+    $case $l=~/^NOOP POST_MAIN/
+        $if $out->[0] !~ /^TEMPLATE/
+            unshift @$out, "PROGRAM $page->{_pagename}", "DUMP_STUB global_init"
+            push @$out, "END"
+        push @$out, "NEWLINE"
+        # $call autolist_functions, add
+        $call function_list_all
+        # $call @parsecode_post
+        return
+
+#----------------------------------------------- 
+subcode: dumpout
+    $foreach $func in @function_list
+        process_function_std($func)
+    $call process_link_objects
+
+    my @out2
+    $dump->{f}=\@out2
+
+    my $global_init=MyDef::compileutil::get_named_block("global_init")
+    $call dump_globals, $global_init
+    MyDef::dumpout::dumpout($dump)
+
+    # filter lines to prefix 7 spaces and labels
+    my ($label, $is_template)
+    $foreach $l in @out2
+        $if $l=~/^\s*LABEL\s+(\d+)/
+            $label=sprintf("%5d ", $1)
+            next
+        $elif $l=~/^\s*TEMPLATE\s+(START|STOP)/
+            $if $1 eq "START"
+                $is_template = 1
+            $else
+                $is_template = undef
+            next
+        $elif $is_template
+            push @$f, $l
+            next
+
+        # label and leading 6 spaces
+        chomp $l
+        my $prefix
+        $if $label
+            $prefix=$label
+            undef $label
+        $else
+            $prefix=' ' x 6
+
+        $(if:F77)
+            $call dump_f77_line
+        $(else)
+            push @$f, "$prefix$l\n"
+    return
+
+    #------------------------------------------- 
+    subcode: dump_globals(out)
+        $call dump_vars, $global_list, $global_hash, $(out)
+        my $main_list = $main_func->{var_list}
+        my $main_hash = $main_func->{var_hash}
+        $call dump_vars, $main_list, $main_hash, $(out)
+
+    subcode: process_link_objects
+        my @objlist
+        my @liblist
+        $foreach $i in keys %objects
+            $if $i=~/^lib(.*)/
+                push @liblist, "-l$1"
+            $else
+                push @objlist, $i
+        my ($lib_list, $obj_list)
+        $if @liblist
+            $lib_list=join(" ", @liblist)
+            $page->{lib_list}=$lib_list
+        $if @objlist
+            $obj_list=join(" ", @objlist)
+            $page->{lib_list}.=" ".$obj_list
+
