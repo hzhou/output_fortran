@@ -1,0 +1,11 @@
+page: test
+    module: f90
+
+    $local n = 10
+
+    $if n == 0
+        $print n is zero
+    $elif n == 10
+        $print n is ten
+    $else
+        $dump n
