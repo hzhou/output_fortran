@@ -1,4 +1,4 @@
-subcode: init_page
+subcode:: init_page
     $global $label_index
     $label_index=0
     $call @update_default_type
@@ -62,7 +62,7 @@ subcode:: parsecode_func_param
 subcode:: parsecode_other
     $case $l=~/^(.+?)\s*([+\-\*\/])=\s*(.+)/
         $l = "$1 = $1 $2 $3"
-    $case $l=~/^call\s+(\w+)/
+    $case $l=~/^call\s+(\w+)/i
         $call add_list_function, $1
         
 #---------------------------------------- 
