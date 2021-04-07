@@ -18,7 +18,10 @@ subcode:: parsecode_func
         $global %objects
         my @tlist = split /,\s*/, $param
         $foreach $f in @tlist
-            $if $f=~/^\w+$/
+            $if $f eq "mpi"
+                $if !$page->{CC}
+                    $page->{CC} = "mpifort"
+            $elif $f=~/^\w+$/
                 $objects{"lib$f"}=1
             $else
                 $objects{$f}=1
@@ -57,12 +60,17 @@ subcode:: parsecode_func
     $call @parsecode_func_other
 
 subcode:: parsecode_func_param
+    $if $func eq "allocate"
+        my @vlist = split /,\s*/, $param2
+        $foreach $v in @vlist
+            push @$out, "ALLOCATE ($v($param1))"
+        return
     $call @parsecode_func_param_other
 
 subcode:: parsecode_other
-    $case $l=~/^(.+?)\s*([+\-\*\/])=\s*(.+)/
+    $case $l=~/^(.+?)\s*([+\-\*])=\s*(.+)/
         $l = "$1 = $1 $2 $3"
-    $case $l=~/^call\s+(\w+)/
+    $case $l=~/^call\s+(\w+)/ and $function_autolist{$1}
         $call add_list_function, $1
         
 #---------------------------------------- 

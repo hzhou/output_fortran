@@ -109,7 +109,7 @@ fncode: parse_fmt_2($s_fmt, $s_vlist)
                 push @out_vlist, shift @vlist
             $elif $s=~/^\$(\w+)/ -> $v
                 my $type = get_var_type_direct($v)
-                $if $type=~/^INTEGER/
+                $if $type=~/^INTEGER/i
                     push @fmt_list, "I6"
                 $elif $type=~/^(REAL|DOUBLE)/
                     push @fmt_list, "F10.4"
