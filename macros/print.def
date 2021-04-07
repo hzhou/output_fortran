@@ -99,7 +99,7 @@ fncode: parse_fmt_2($s_fmt, $s_vlist)
             $elif $s=~/^%(.*)([fgd])/
                 my ($w, $f)=($1, $2)
                 $if !$w
-                    $w = 6
+                    $w = "6.2"
                 $if $f eq "f"
                     push @fmt_list, "F$w"
                 $elif $f eq "g"

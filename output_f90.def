@@ -20,6 +20,9 @@ page: output_f90, output_main
 macros: 
     add_vars: global|local|const
 
+subcode:: init_page
+    $call autolist_functions, add
+
 subcode:: parse_add_var_cases
     $case $func eq "const"
         my $var = global_add_var($(v))
@@ -30,7 +33,6 @@ subcode:: parsecode_special
         push @scope_stack, $cur_scope
         $cur_scope = $main_func
     $case $l=~/^NOOP POST_MAIN/
-        # $call autolist_functions, add
         $call function_list_all
         return
 
@@ -62,17 +64,17 @@ subcode: dumpout
     subcode: declare_functions(out)
         my ($count, $last_type)
         $foreach $func in @function_list
-            my $ret_type = $func->{ret_type}
+            my $return_type = $func->{return_type}
             my $ret_var = $func->{ret_var}
-            $if !$ret_type and $ret_var
-                $ret_type = $ret_var->{type}
-            $if $ret_type
+            $if !$return_type and $ret_var
+                $return_type = $ret_var->{type}
+            $if $return_type
                 my $name = $func->{name}
-                $if $last_type eq $ret_type
+                $if $last_type eq $return_type
                     $$(out)[-1].=", $name"
                 $else
-                    push @$(out), $ret_type.":: $name"
-                    $last_type = $ret_type
+                    push @$(out), $return_type.":: $name"
+                    $last_type = $return_type
                 $count++
         $if $count>0
             push @$(out), "!----"

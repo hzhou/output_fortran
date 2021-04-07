@@ -5,11 +5,11 @@ subcode:: parsecode_func_other
         $if $1 eq "return" or $1 eq "result"
             my $var = parse_var($param)
             $cur_function->{ret_var}= $var
-            $cur_function->{ret_type}=$var->{type}
+            $cur_function->{return_type}=$var->{type}
         $elif $1 eq "recursive"
             $cur_function->{recursive}=1
         $elif $1 eq "return_type"
-            $cur_function->{ret_type}=$param
+            $cur_function->{return_type}=$param
         $elif $1 eq "parameter"
             $call add_function_params, $cur_function
         return
@@ -31,14 +31,18 @@ subcode: function_param_fortran
     push @$param_list, $name
 
 subcode: function_open_fortran
-    my $ret_type = $func->{ret_type}
+    my $return_type = $func->{return_type}
     my $ret_var = $func->{ret_var}
     my $param_list = $func->{param_list}
     my $param = join(', ', @$param_list)
-    $if !($ret_type or $ret_var)
+    $print return_type: $return_type
+    $print ret_var: $ret_var
+    $if !($return_type or $ret_var)
+        $func->{signature}="SUBROUTINE $name"
         push @$open, "SUBROUTINE $name($param)"
     $elif $ret_var
         $(set:r=$ret_var->{$1})
+        $func->{signature}="FUNCTION $name"
         my $l="FUNCTION $name($param)"
         $l.= " RESULT($(r:name))"
         $if $func->{recursive}
@@ -46,7 +50,8 @@ subcode: function_open_fortran
         push @$open, $l
         push @$pre, "$(r:type) :: $(r:name)"
     $else
-        push @$open, "$ret_type FUNCTION $name($param)"
+        $func->{signature}="FUNCTION $name"
+        push @$open, "$return_type FUNCTION $name($param)"
     my $var_list = $func->{var_list}
     my $var_hash = $func->{var_hash}
     $call dump_vars, $param_list, $var_hash, $pre
@@ -54,7 +59,7 @@ subcode: function_open_fortran
     @$var_list=() # so close_scope won't declare them again
 
 subcode: function_close_fortran
-    push @$close, "END"
+    push @$close, "END $func->{signature}"
     push @$close, "NEWLINE"
 
 subcode: infer_return_fortran
